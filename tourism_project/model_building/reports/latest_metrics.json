@@ -1,0 +1,49 @@
+{
+  "algorithm": "XGBClassifier",
+  "decision_threshold": 0.5,
+  "best_params": {
+    "model__colsample_bytree": 0.7,
+    "model__learning_rate": 0.1,
+    "model__max_depth": 8,
+    "model__n_estimators": 200,
+    "model__reg_lambda": 1.0,
+    "model__subsample": 0.8
+  },
+  "best_cv_f1": 0.7906,
+  "train_metrics": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  },
+  "test_metrics": {
+    "accuracy": 0.9365,
+    "precision": 0.8714,
+    "recall": 0.7871,
+    "f1": 0.8271,
+    "roc_auc": 0.9546
+  },
+  "numeric_features": [
+    "Age",
+    "CityTier",
+    "DurationOfPitch",
+    "NumberOfPersonVisiting",
+    "NumberOfFollowups",
+    "PreferredPropertyStar",
+    "NumberOfTrips",
+    "Passport",
+    "PitchSatisfactionScore",
+    "OwnCar",
+    "NumberOfChildrenVisiting",
+    "MonthlyIncome"
+  ],
+  "categorical_features": [
+    "TypeofContact",
+    "Occupation",
+    "Gender",
+    "ProductPitched",
+    "MaritalStatus",
+    "Designation"
+  ]
+}

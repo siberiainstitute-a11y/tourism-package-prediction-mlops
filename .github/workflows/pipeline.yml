@@ -1,0 +1,102 @@
+name: Tourism Project Pipeline
+
+on:
+  push:
+    branches:
+      - main            # every code update that reaches main re-runs the whole pipeline
+  workflow_dispatch:     # also allows a manual run from the Actions tab
+
+permissions:
+  contents: write        # lets the training job commit its evaluation report back to main
+
+concurrency:
+  group: tourism-pipeline   # runs are queued, never executed in parallel
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+
+  register-dataset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install Dependencies
+        run: pip install -r tourism_project/requirements.txt
+      - name: Upload Dataset to Hugging Face Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python tourism_project/model_building/data_register.py
+
+  data-prep:
+    needs: register-dataset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install Dependencies
+        run: pip install -r tourism_project/requirements.txt
+      - name: Run Data Preparation
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python tourism_project/model_building/prep.py
+
+  model-training:
+    needs: data-prep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install Dependencies
+        run: pip install -r tourism_project/requirements.txt
+      - name: Start MLflow Server
+        run: |
+          nohup mlflow ui --host 0.0.0.0 --port 5000 > mlflow.log 2>&1 &
+          # wait (max 60 s) until the tracking server answers
+          for i in $(seq 1 30); do curl -s http://localhost:5000 > /dev/null && break; sleep 2; done
+      - name: Model Building
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MLFLOW_TRACKING_URI: http://localhost:5000
+        run: python tourism_project/model_building/train.py
+      - name: Keep MLflow runs as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-runs
+          path: mlruns
+      - name: Commit evaluation report back to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tourism_project/model_building/reports/latest_metrics.json
+          # [skip ci] stops this bot commit from triggering the pipeline again
+          git diff --cached --quiet || git commit -m "Update model evaluation report [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+  deploy-hosting:
+    needs: [model-training, data-prep, register-dataset]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install Dependencies
+        run: pip install -r tourism_project/requirements.txt
+      - name: Push files to Frontend Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python tourism_project/hosting/hosting.py
